@@ -22,19 +22,17 @@ def calculate_iou(prediction_box, gt_box):
     overlap = 0
 
     #If boxes don't touch we return 0
-    if prediction_box.xmin >= gt_box.xmax or prediction_box.xmax <= gt_box.xmin: return 0
-    if prediction_box.ymin >= gt_box.ymax or prediction_box.ymax <= gt_box.ymin: return 0
-
-    #Calculating union
-    union = (prediction_box.xmax - prediction_box.xmin)*(prediction_box.ymax - prediction_box.ymin)\
-            + (gt_box.xmax - gt_box.xmin)*(gt_box.ymax - gt_box.ymin)
-
+    if prediction_box[0] >= gt_box[2] or prediction_box[2] <= gt_box[0]: return 0
+    if prediction_box[1] >= gt_box[3] or prediction_box[3] <= gt_box[1]: return 0
 
     #Calculating intersection
-    dx = min(prediction_box.xmax, gt_box.xmax) - max(prediction_box.xmin, gt_box.xmin)
-    dy = min(prediction_box.ymax, gt_box.ymax) - max(prediction_box.ymin, gt_box.ymin)
+    dx = min(prediction_box[2], gt_box[2]) - max(prediction_box[0], gt_box[0])
+    dy = min(prediction_box[3], gt_box[3]) - max(prediction_box[1], gt_box[1])
     intersection = dx*dy
 
+    #Calculating union
+    union = (prediction_box[2] - prediction_box[0])*(prediction_box[3] - prediction_box[1])\
+            + (gt_box[2] - gt_box[0])*(gt_box[3] - gt_box[1]) - intersection
 
     return intersection/union
 
