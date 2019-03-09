@@ -231,7 +231,31 @@ def get_precision_recall_curve(all_prediction_boxes, all_gt_boxes,
     # evaluation
     confidence_thresholds = np.linspace(0, 1, 500)
     # YOUR CODE HERE
-    raise NotImplementedError
+
+    n_images = len(all_prediction_boxes)
+    assert n_images == len(all_gt_boxes)
+
+    result_precision = np.zeros(np.shape(confidence_thresholds))
+    result_recall = np.zeros(np.shape(confidence_thresholds))
+
+    for q in range(np.shape(confidence_thresholds)[0]):
+
+        threshold = confidence_thresholds[q]
+        work_copy_all_prediction_boxes = copy.deepcopy(all_prediction_boxes)
+
+        for i in range(n_images):
+            filter_mask = np.greater(confidence_scores[i], threshold)
+            work_copy_all_prediction_boxes[i] = (work_copy_all_prediction_boxes[i])[filter_mask]
+
+
+        precision, recall = calculate_precision_recall_all_images(work_copy_all_prediction_boxes, all_gt_boxes, iou_threshold)
+
+        result_precision[q] = precision
+        result_recall[q] = recall
+
+    return result_precision, result_recall
+
+
 
 
 def plot_precision_recall_curve(precisions, recalls):
@@ -270,7 +294,21 @@ def calculate_mean_average_precision(precisions, recalls):
     # evaluation
     recall_levels = np.linspace(0, 1.0, 11)
     # YOUR CODE HERE
-    raise NotImplementedError
+
+    print(recalls)
+
+    p = recalls.argsort()
+    recalls = recalls[p]
+    precisions = precisions[p]
+    precisions_interpolated = np.interp(recall_levels, recalls, precisions)
+
+    print(recalls)
+
+    for i in range(np.shape(precisions_interpolated)[0]):
+        precisions_interpolated[i] = np.max(precisions_interpolated[i:])
+
+    return np.mean(precisions_interpolated)
+
 
 
 def mean_average_precision(ground_truth_boxes, predicted_boxes):
