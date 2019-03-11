@@ -1,8 +1,7 @@
 import numpy as np
-#from PIL import Image
-#from matplotlib.pyplot import imshow
-#from drawing_utils import read_classes, draw_boxes, scale_boxes
-import operator
+from PIL import Image
+import matplotlib.pyplot as plt
+from drawing_utils import read_classes, draw_boxes, scale_boxes
 
 
 
@@ -51,18 +50,147 @@ def yolo_filter_boxes(box_confidence, boxes, box_class_probs, threshold = .6):
     scores = max_box_score[mask]
     boxes = boxes[mask]
     classes = max_box_score_index[mask]
+    return scores, boxes, classes
+
+def iou(box1, box2):
+
+    """Implement the intersection over union (IoU) between box1 and box2
+
+    Arguments:
+        box1 -- first box, list object with coordinates (x1, y1, x2, y2)
+        box2 -- second box, list object with coordinates (x1, y1, x2, y2)
+    """
+    # YOUR CODE HERE
+
+    union = 0
+    overlap = 0
+    print(box1)
+    #If boxes don't touch we return 0
+    if box1[0] >= box2[2] or box1[2] <= box2[0]: return 0
+    if box1[1] >= box2[3] or box1[3] <= box2[1]: return 0
+
+    #Calculating intersection
+    dx = min(box1[2], box2[2]) - max(box1[0], box2[0])
+    dy = min(box1[3], box2[3]) - max(box1[1], box2[1])
+    intersection = dx*dy
+
+    #Calculating union
+    union = (box1[2] - box1[0])*(box1[3] - box1[1])\
+            + (box2[2] - box2[0])*(box2[3] - box2[1]) - intersection
+
+    return intersection/union
+
+def yolo_non_max_suppression(scores, boxes, classes, max_boxes = 10, iou_threshold = 0.5):
+
+    """
+    Applies Non-max suppression (NMS) to set of boxes
+
+    Arguments:
+        scores -- np.array of shape (None,), output of yolo_filter_boxes()
+        boxes -- np.array of shape (None, 4), output of yolo_filter_boxes()
+            that have been scaled to the image size (see later)
+        classes -- np.array of shape (None,), output of yolo_filter_boxes()
+        max_boxes -- integer, maximum number of predicted boxes you'd like
+        iou_threshold -- real value, "intersection over union" threshold used for NMS filtering
+
+    Returns:
+        scores -- tensor of shape (, None), predicted score for each box
+        boxes -- tensor of shape (4, None), predicted box coordinates
+        classes -- tensor of shape (, None), predicted class for each box
+
+    Note: The "None" dimension of the output tensors has obviously to be less than max_boxes.
+    Note also that this function will transpose the shapes of scores, boxes, classes.
+    This is made for convenience.
+    """
+
+    nms_indices = []
+
+    # Use iou() to get the list of indices corresponding to boxes you keep
+    temp_scores = np.copy(scores)
+    highest_score_index = np.argmax(temp_scores)
+    while temp_scores[highest_score_index] != -1e9:
+        for i in range(len(temp_scores)):
+            if highest_score_index == i:
+                continue
+            if iou(boxes[highest_score_index],boxes[i]) > iou_threshold:
+                temp_scores[i] = -1e9
+        temp_scores[highest_score_index] = -1e9
+        nms_indices.append(highest_score_index)
+        highest_score_index = np.argmax(temp_scores)
+    print("NMS indices:", nms_indices)
+
+    # Use index arrays to select only nms_indices from scores, boxes and classes
+    scores = scores[np.array(nms_indices)]
+    boxes = boxes[np.array(nms_indices)]
+    classes = classes[np.array(nms_indices)]
 
     return scores, boxes, classes
 
+def yolo_eval(yolo_outputs, image_shape = (720., 1280.), max_boxes=10, score_threshold=.6, iou_threshold=.5):
+    """
+    Converts the output of YOLO encoding (a lot of boxes) to your predicted boxes along with their scores, box coordinates and classes.
+
+    Arguments:
+        yolo_outputs -- output of the encoding model (for image_shape of (608, 608, 3)), contains 4 np.array:
+                        box_confidence: tensor of shape (None, 19, 19, 5, 1)
+                        boxes: tensor of shape (None, 19, 19, 5, 4)
+                        box_class_probs: tensor of shape (None, 19, 19, 5, 80)
+        image_shape -- np.array of shape (2,) containing the input shape, in this notebook we use
+            (608., 608.) (has to be float32 dtype)
+        max_boxes -- integer, maximum number of predicted boxes you'd like
+        score_threshold -- real value, if [ highest class probability score < threshold],
+            then get rid of the corresponding box
+        iou_threshold -- real value, "intersection over union" threshold used for NMS filtering
+
+    Returns:
+        scores -- np.array of shape (None, ), predicted score for each box
+        boxes -- np.array of shape (None, 4), predicted box coordinates
+        classes -- np.array of shape (None,), predicted class for each box
+    """
+
+    ### START CODE HERE ###
+
+    # Retrieve outputs of the YOLO model (≈1 line)
+    box_confidence = np.copy(yolo_outputs[0])
+    box_confidence = np.squeeze(box_confidence, axis=0)
+
+    boxes = np.copy(yolo_outputs[1])
+    boxes = np.squeeze(boxes, axis=0)
+
+    box_class_probs = np.copy(yolo_outputs[2])
+    box_class_probs = np.squeeze(box_class_probs, axis=0)
+
+    # Use one of the functions you've implemented to perform Score-filtering with a threshold of score_threshold (≈1 line)
+    scores, boxes, classes = yolo_filter_boxes(box_confidence, boxes, box_class_probs, score_threshold)
+    # Scale boxes back to original image shape.
+    boxes = scale_boxes(boxes, image_shape)
+    # Use one of the functions you've implemented to perform Non-max suppression with a threshold of iou_threshold (≈1 line)
+    scores, boxes, classes = yolo_non_max_suppression(scores, boxes, classes, max_boxes, iou_threshold)
+    ### END CODE HERE ###
+
+    return scores, boxes, classes
+
+
+
+# DO NOT CHANGE
+image = Image.open("test.jpg")
+box_confidence = np.load("box_confidence.npy")
+boxes = np.load("boxes.npy")
+box_class_probs = np.load("box_class_probs.npy")
+yolo_outputs = (box_confidence, boxes, box_class_probs)
+
+# DO NOT CHANGE
+image_shape = (720., 1280.)
+
 #DO NOT EDIT THIS CODE
-np.random.seed(0)
-box_confidence = np.random.normal(size=(19, 19, 5, 1), loc=1, scale=4)
-boxes = np.random.normal(size=(19, 19, 5, 4), loc=1, scale=4)
-box_class_probs = np.random.normal(size=(19, 19, 5, 80), loc=1, scale=4)
-scores, boxes, classes = yolo_filter_boxes(box_confidence, boxes, box_class_probs, threshold = 0.5)
-print("scores[2] = " + str(scores[2]))
-print("boxes[2] = " + str(boxes[2]))
-print("classes[2] = " + str(classes[2]))
-print("scores.shape = " + str(scores.shape))
-print("boxes.shape = " + str(boxes.shape))
-print("classes.shape = " + str(classes.shape))
+out_scores, out_boxes, out_classes = yolo_eval(yolo_outputs, image_shape)
+out_classes=out_classes.astype(np.int64)
+
+#DO NOT EDIT THIS CODE
+# Print predictions info
+print('Found {} boxes'.format(len(out_boxes)))
+# Draw bounding boxes on the image
+draw_boxes(image, out_scores, out_boxes, out_classes)
+# Display the results in the notebook
+plt.imshow(image)
+plt.show()
